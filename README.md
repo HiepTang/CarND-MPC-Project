@@ -2,7 +2,56 @@
 Self-Driving Car Engineer Nanodegree Program
 
 ---
+## Introduction
+In this project, I will implement Model Predictive Control (MPC) to drive the car around the track using C++.
+## The MPC Model
+My Model Predictive Control (MPC) involves simulating the following actuator inputs
+* ptsx: x position of waypoints
+* ptsy: y position of waypoints
+* px: x position of the car
+* py: y position of the car
+* psi: orientation angle of the car
+* v: car velocity
+* delta: steering angle of the car
+* a: car throotle
+## Polynomial Fitting and MPC Preprocessing
+I transform the points from the similuator's cordinates into the car's cordinates.
+```
+// Transform to car's orientation
+void transform2car(vector<double> ptsx, vector<double> ptsy, double px, double py, double psi, Eigen::VectorXd &ptsx_c,Eigen::VectorXd &ptsy_c) {
+  for(unsigned int i = 0; i < ptsx.size(); i++) {
+    double x = ptsx[i] - px;
+    double y = ptsy[i] - py;
+    ptsx_c[i] = x * cos(-psi) - y * sin(-psi);
+    ptsy_c[i] = x * sin(-psi) + y * cos(-psi);
+  }
+}
+```
+Using the polyfit function to fit a 3rd-order polynomial to the transformed x and y cordinates. The cross track error (cte) is calculated by the polyeval function. The orientation error (epsi) can be calculated from the derivative of the polynomial fit line.
+## Timestep Length and Elapsed Duration (N & dt)
+First of all, I have tried N = 25 and dt = 0.05 (T = 1.25 seconds) but the car was crashed after the bridge. I try to increase N to 100 with dt = 0.01 (T = 1 second) but the car still cannot go far. According the lession, it's not good practice to set N so big, so I tried to descrese N.
+After some expierements, I found the T range should be from 1 to 1.5 seconds. The pair N = 15 and dt = 0.1 can help the car complete one round but there is still some zig zacs and almot went out after the bridge.
+Two pairs N = 18, dt = 0.08 and N = 16, dt = 0.08 can help the car complete almost two rounds with the maximun speed over 100mph.
+Finnally, I got the best one with N = 10 and dt = 0.1. The car continue running after 4 rounds and smoothly with the maximun speed about 95mph.
+## Model Predictive Control with Latency
+The project has an assumption that the latency between the command to the similuator is 100ms and we need to due with it. I tried to predict the car state after 100ms (latency) to fed to the MPC.Solve method.
+```
+ // Due with latency problem
+ // Predict state after latency
+ double pred_px = 0.0 + v * latency;  // x is 0 after transformed
+ const double pred_py = 0.0;  // y is 0
+ double pred_psi = 0.0 + v * -delta / Lf * latency; // psi is 0
+ double pred_v = v + a * latency;
+ double pred_cte = cte + v * sin(epsi) * latency;
+ double pred_epsi = epsi + v * -delta / Lf * latency;
 
+ // The predicted state values
+ Eigen::VectorXd pred_state(6);
+ pred_state << pred_px, pred_py, pred_psi, pred_v, pred_cte, pred_epsi;
+
+ // Solve for actuations
+ auto actuations = mpc.Solve(pred_state, coeffs);
+```
 ## Dependencies
 
 * cmake >= 3.5
